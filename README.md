@@ -229,7 +229,7 @@ https://github.com/Hrudaya-Joshi/PromptWars-SmartBhaarat
 
 Passionate about AI, Web Development, Civic Technology, and building impactful digital solutions.
 
-LinkedIn: *(Add your LinkedIn profile here)*
+LinkedIn: https://www.linkedin.com/in/hrudaya-joshi-416754377
 
 GitHub: https://github.com/Hrudaya-Joshi
 
