@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartBhaarat - GenAI Civic Platform</title>
+  
+  <!-- SEO Best Practices -->
+  <meta name="description" content="SmartBhaarat is a GenAI-powered civic platform helping Indian citizens check scheme eligibility, auto-pack required documents, translate bureaucratic jargon, and track municipal complaints transparently.">
+  <meta name="keywords" content="SmartBhaarat, GenAI civic, Seva Sathi, government services, public issue reporting, bureaucracy translator, document helper, civic twin dashboard">
+  
+  <!-- Google Fonts & FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  
+  <!-- Custom Styling -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Scanner Overlay Animation Widget -->
+  <div id="scannerOverlay" class="scanner-overlay">
+    <div class="scanner-box">
+      <div class="scanner-laser"></div>
+    </div>
+    <div id="scannerText" class="scanner-text">Initializing Document OCR Scan...</div>
+    <div id="scannerSubtext" class="scanner-subtext">Verifying Aadhaar parameters & security signatures</div>
+  </div>
+
+  <!-- Full-Screen Onboarding Panel (Sign In / Sign Up) -->
+  <div id="onboardingScreen" class="onboarding-screen">
+    <div class="onboarding-card glass">
+      <div class="onboarding-logo">
+        <div class="logo-icon">
+          <i class="fa-solid fa-hands-holding-child"></i>
+        </div>
+        <div class="onboarding-title">SmartBhaarat</div>
+        <p style="font-size: 12.5px; color: var(--text-muted);">GenAI-Powered Civic Platform</p>
+      </div>
+
+      <div class="onboarding-tabs">
+        <button class="onboarding-tab-btn active" onclick="toggleOnboardingTab('login')" id="tab-login-btn">Log In</button>
+        <button class="onboarding-tab-btn" onclick="toggleOnboardingTab('signup')" id="tab-signup-btn">Create Account</button>
+      </div>
+
+      <!-- Log In Form -->
+      <form id="loginForm" class="onboarding-form active" onsubmit="event.preventDefault(); handleLogin();">
+        <div class="form-group">
+          <label><i class="fa-solid fa-id-card"></i> Aadhaar or Phone Number</label>
+          <input type="text" class="form-control" id="login-identifier" placeholder="12-digit Aadhaar / 10-digit Phone" required>
+        </div>
+        <div class="form-group">
+          <label><i class="fa-solid fa-lock"></i> Password</label>
+          <input type="password" class="form-control" id="login-password" placeholder="Enter password" required>
+        </div>
+        <div class="error-message" id="login-error-msg">Invalid credentials. Please verify details.</div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; margin-top: 10px;">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In to Platform
+        </button>
+      </form>
+
+      <!-- Sign Up Form -->
+      <form id="signupForm" class="onboarding-form" onsubmit="event.preventDefault(); handleSignUp();">
+        <div class="form-group">
+          <label><i class="fa-solid fa-user"></i> Full Name</label>
+          <input type="text" class="form-control" id="signup-name" placeholder="As written on Aadhaar card" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label><i class="fa-solid fa-fingerprint"></i> Aadhaar Number</label>
+            <input type="text" class="form-control" id="signup-aadhaar" placeholder="12 digits" maxlength="12" required>
+          </div>
+          <div class="form-group">
+            <label><i class="fa-solid fa-mobile-screen"></i> Phone Number</label>
+            <input type="text" class="form-control" id="signup-phone" placeholder="10 digits" maxlength="10" required>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label><i class="fa-solid fa-map"></i> State</label>
+            <input type="text" class="form-control" id="signup-state" placeholder="e.g. Karnataka" required>
+          </div>
+          <div class="form-group">
+            <label><i class="fa-solid fa-city"></i> District / City</label>
+            <input type="text" class="form-control" id="signup-district" placeholder="e.g. Bengaluru" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label><i class="fa-solid fa-lock"></i> Set Password</label>
+          <input type="password" class="form-control" id="signup-password" placeholder="At least 6 characters" required>
+        </div>
+        <div class="error-message" id="signup-error-msg">Aadhaar must be 12 digits, Phone must be 10 digits.</div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; margin-top: 10px;">
+          <i class="fa-solid fa-user-plus"></i> Initialize Citizen Twin Account
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-container" style="display: flex; width: 100%;">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar glass">
+      <div class="brand">
+        <div class="brand-logo">
+          <i class="fa-solid fa-hands-holding-child"></i>
+        </div>
+        <div class="brand-name">SmartBhaarat</div>
+      </div>
+      
+      <nav class="nav-menu">
+        <li class="nav-item active" id="tab-dashboard">
+          <button onclick="switchView('dashboard')" id="nav-btn-dashboard">
+            <i class="fa-solid fa-chart-line"></i> Civic Twin Dashboard
+          </button>
+        </li>
+        <li class="nav-item" id="tab-services">
+          <button onclick="switchView('services')" id="nav-btn-services">
+            <i class="fa-solid fa-circle-nodes"></i> Services & Life Events
+          </button>
+        </li>
+        <li class="nav-item" id="tab-issue">
+          <button onclick="switchView('issue')" id="nav-btn-issue">
+            <i class="fa-solid fa-map-location-dot"></i> Report Public Issue
+          </button>
+        </li>
+        <li class="nav-item" id="tab-pack">
+          <button onclick="switchView('pack')" id="nav-btn-pack">
+            <i class="fa-solid fa-folder-open"></i> Document Auto-Pack
+          </button>
+        </li>
+        <li class="nav-item" id="tab-translator">
+          <button onclick="switchView('translator')" id="nav-btn-translator">
+            <i class="fa-solid fa-language"></i> Bureaucracy Translator
+          </button>
+        </li>
+        <li class="nav-item" id="tab-profile">
+          <button onclick="switchView('profile')" id="nav-btn-profile">
+            <i class="fa-solid fa-user-gear"></i> <span id="txt-nav-profile">My Profile</span>
+          </button>
+        </li>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="setting-row">
+          <span class="setting-label"><i class="fa-solid fa-globe"></i> Language</span>
+          <select id="langSelect" class="lang-select" onchange="changeLanguage(this.value)">
+            <option value="en">English</option>
+            <option value="hi">हिंदी (Hindi)</option>
+            <option value="ta">தமிழ் (Tamil)</option>
+            <option value="bn">বাংলা (Bengali)</option>
+            <option value="te">తెలుగు (Telugu)</option>
+            <option value="mr">मराठी (Marathi)</option>
+            <option value="gu">ગુજરાતી (Gujarati)</option>
+            <option value="kn">ಕನ್ನಡ (Kannada)</option>
+            <option value="ml">മലയാളம் (Malayalam)</option>
+            <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+            <option value="or">ଓଡ଼ିଆ (Odia)</option>
+            <option value="as">অসমীয়া (Assamese)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label"><i class="fa-solid fa-circle-half-stroke"></i> Theme</span>
+          <button class="theme-toggle-btn" onclick="toggleTheme()" id="themeToggleBtn">
+            <i class="fa-solid fa-sun" id="themeIcon"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content chat-expanded" id="mainContent">
+      
+      <!-- Top Header -->
+      <header class="header">
+        <div class="header-greeting">
+          <h1 id="txt-greeting">Namaste, Citizen</h1>
+          <p id="txt-subtitle">Welcome to your intelligent, transparent connection to local governance.</p>
+        </div>
+        <div class="header-badges">
+          <div class="badge badge-verified">
+            <i class="fa-solid fa-circle-check"></i> <span id="txt-verified-badge">Verified (Aadhaar Linked)</span>
+          </div>
+          <div class="badge badge-location">
+            <i class="fa-solid fa-location-crosshairs"></i> <span id="txt-location-badge">Bengaluru, Karnataka</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- VIEW 1: Civic Twin Dashboard -->
+      <section id="view-dashboard" class="view-panel active-view">
+        <div class="dashboard-grid">
+          <div class="metric-card glass">
+            <div class="metric-icon"><i class="fa-solid fa-check-double"></i></div>
+            <div class="metric-info">
+              <h3 id="metric-resolved-count">482</h3>
+              <p id="txt-metric-resolved">Resolved Issues</p>
+            </div>
+          </div>
+          <div class="metric-card glass">
+            <div class="metric-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+            <div class="metric-info">
+              <h3 id="metric-avg-time">4.2 Days</h3>
+              <p id="txt-metric-time">Avg. Resolution Time</p>
+            </div>
+          </div>
+          <div class="metric-card glass">
+            <div class="metric-icon"><i class="fa-solid fa-users"></i></div>
+            <div class="metric-info">
+              <h3 id="metric-satisfaction">89.4%</h3>
+              <p id="txt-metric-satisfaction">Citizen Satisfaction</p>
+            </div>
+          </div>
+          <div class="metric-card glass">
+            <div class="metric-icon"><i class="fa-solid fa-award"></i></div>
+            <div class="metric-info">
+              <h3 id="metric-efficiency">Zone 4 (Top)</h3>
+              <p id="txt-metric-efficiency">Efficiency Ranking</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics-row">
+          <!-- Main Chart -->
+          <div class="chart-card glass">
+            <div class="chart-header">
+              <div>
+                <h4 class="chart-title" id="txt-chart1-title">Monthly Grievance Resolution Trend</h4>
+                <p class="chart-subtitle" id="txt-chart1-subtitle">Real-time status comparison of reported vs resolved municipal logs</p>
+              </div>
+            </div>
+            <div class="chart-container" id="trendChartContainer">
+              <!-- Rendered via SVG helper in JS -->
+            </div>
+          </div>
+          <!-- Department Distribution -->
+          <div class="chart-card glass">
+            <div class="chart-header">
+              <div>
+                <h4 class="chart-title" id="txt-chart2-title">Service Allocation Breakdown</h4>
+                <p class="chart-subtitle" id="txt-chart2-subtitle">Volume distribution by civic categories</p>
+              </div>
+            </div>
+            <div class="chart-container" id="distributionChartContainer">
+              <!-- Rendered via SVG helper in JS -->
+            </div>
+          </div>
+        </div>
+
+        <div class="twin-activities">
+          <!-- Left Feed: Local Community Activity (Map Linked) -->
+          <div class="feed-card glass">
+            <div class="feed-header">
+              <span id="txt-feed-header-left">Community Complaint Feed (500m radius)</span>
+              <span class="badge" style="background: var(--bg-tertiary); font-size: 11px;" id="txt-feed-active-count">5 Active Nearby</span>
+            </div>
+            <div class="feed-list" id="community-feed-list">
+              <!-- Populated dynamically via JS -->
+            </div>
+          </div>
+          <!-- Right Feed: My Submissions & Progress -->
+          <div class="feed-card glass">
+            <div class="feed-header">
+              <span id="txt-feed-header-right">My Submitted Grievances</span>
+              <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="switchView('issue')" id="txt-new-complaint-btn">
+                <i class="fa-solid fa-plus"></i> File New
+              </button>
+            </div>
+            <div class="feed-list" id="my-feed-list">
+              <!-- Populated dynamically via JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: Services & Life Events -->
+      <section id="view-services" class="view-panel">
+        <div class="services-layout">
+          <!-- Life Event Selector -->
+          <div class="life-events-section">
+            <h3 class="section-label" id="txt-life-stages-label">Select Your Current Life Stage</h3>
+            <div class="life-events-grid">
+              <div class="event-card glass" onclick="selectLifeEvent('newborn')" id="event-newborn">
+                <div class="event-icon"><i class="fa-solid fa-baby"></i></div>
+                <div class="event-name" id="txt-stage-newborn">Newborn Child</div>
+              </div>
+              <div class="event-card glass" onclick="selectLifeEvent('business')" id="event-business">
+                <div class="event-icon"><i class="fa-solid fa-briefcase"></i></div>
+                <div class="event-name" id="txt-stage-business">Starting a Business</div>
+              </div>
+              <div class="event-card glass" onclick="selectLifeEvent('marriage')" id="event-marriage">
+                <div class="event-icon"><i class="fa-solid fa-heart"></i></div>
+                <div class="event-name" id="txt-stage-marriage">Just Married</div>
+              </div>
+              <div class="event-card glass" onclick="selectLifeEvent('senior')" id="event-senior">
+                <div class="event-icon"><i class="fa-solid fa-person-cane"></i></div>
+                <div class="event-name" id="txt-stage-senior">Senior Citizen / Pension</div>
+              </div>
+              <div class="event-card glass" onclick="selectLifeEvent('moving')" id="event-moving">
+                <div class="event-icon"><i class="fa-solid fa-truck-ramp-box"></i></div>
+                <div class="event-name" id="txt-stage-moving">Moving City</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wizard Eligibility Form -->
+          <div class="glass wizard-box" id="scheme-wizard-panel" style="display: none;">
+            <div class="wizard-header">
+              <div class="wizard-title">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span id="txt-wizard-title">Smart Scheme Eligibility Assessment</span>
+              </div>
+            </div>
+            
+            <div class="wizard-steps">
+              <div class="step-node active" id="step-node-1">1</div>
+              <div class="step-node" id="step-node-2">2</div>
+              <div class="step-node" id="step-node-3">3</div>
+            </div>
+
+            <div class="wizard-content" id="wizard-questions-container">
+              <!-- Populated dynamically via JS -->
+            </div>
+
+            <div class="wizard-buttons">
+              <button class="btn btn-secondary" onclick="wizardPrev()" id="btn-wizard-prev" style="visibility: hidden;">
+                <i class="fa-solid fa-arrow-left"></i> <span id="txt-back">Back</span>
+              </button>
+              <button class="btn btn-primary" onclick="wizardNext()" id="btn-wizard-next">
+                <span id="txt-next">Next</span> <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Recommendations Output -->
+          <div class="recommendations-box" id="schemes-recommendations-box">
+            <h3 class="section-label" id="txt-recommendations-label">Recommended Schemes & Services</h3>
+            <div id="schemes-list-container">
+              <!-- Dynamic cards loaded via JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: Report Public Issue -->
+      <section id="view-issue" class="view-panel">
+        <div class="issue-layout">
+          <!-- Form Section -->
+          <div class="glass reporter-form-box">
+            <h3 class="section-label" style="margin-bottom: 20px;" id="txt-complaint-header">Submit Civic Grievance</h3>
+            
+            <form id="grievanceForm" onsubmit="event.preventDefault(); submitGrievance();">
+              <div class="form-group">
+                <label id="lbl-issue-type">Grievance Category</label>
+                <select class="form-control" id="form-category" onchange="runAIComplaintIntel()" required>
+                  <option value="" disabled selected id="txt-select-cat">Select a Category</option>
+                  <option value="Potholes / Road Repair" id="cat-potholes">Potholes & Road Damage</option>
+                  <option value="Water Leakage / Drainage" id="cat-water">Water Leakage & Sewage Block</option>
+                  <option value="Garbage Pile / Sanitation" id="cat-garbage">Garbage Pile & Cleanliness</option>
+                  <option value="Street Light Failure" id="cat-streetlight">Street Light Outage</option>
+                  <option value="Public Safety Concerns" id="cat-safety">Public Safety Concern</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label id="lbl-issue-desc">Detailed Description (AI auto-drafts municipality letters based on this)</label>
+                <textarea class="form-control" id="form-description" rows="4" placeholder="Describe the street name, landmarks, and details of the civic failure..." oninput="runAIComplaintIntel()" required></textarea>
+              </div>
+
+              <div class="form-group">
+                <label id="lbl-issue-location">Select Location on Map (Duplicates checked dynamically)</label>
+                <div class="map-selector-container">
+                  <div id="map-selector"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <input type="text" class="form-control" id="form-lat" placeholder="Latitude" readonly required>
+                  <input type="text" class="form-control" id="form-lng" placeholder="Longitude" readonly required>
+                </div>
+                <input type="text" class="form-control" id="form-address" placeholder="Address auto-detected" style="margin-top: 10px;" readonly>
+              </div>
+
+              <div class="form-group">
+                <label id="lbl-issue-photo">Upload Proof (Simulates GenAI OCR Check)</label>
+                <div class="file-upload-zone" onclick="simulateGrievancePhotoUpload()">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <p id="txt-upload-instruction">Click here to upload street issue photo (simulates instant image verification)</p>
+                  <input type="file" id="form-file" class="file-input-hidden" accept="image/*" onchange="onGrievancePhotoSelected(this)">
+                </div>
+                <div id="upload-preview-container" style="display: none; margin-top: 12px; text-align: center;">
+                  <img id="upload-preview" src="" alt="Proof Preview" style="max-height: 120px; border-radius: 8px; border: 1px solid var(--border-color);">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 14px;" id="btn-submit-grievance">
+                <i class="fa-solid fa-paper-plane"></i> <span id="txt-submit-btn">File Official Complaint</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- AI Intelligence Companion Panel -->
+          <div class="glass complaint-intel-box">
+            <h3 class="section-label" style="font-size: 16px;" id="txt-ai-intel-header"><i class="fa-solid fa-brain"></i> AI Complaint Intelligence</h3>
+            
+            <!-- Duplicate detection alert -->
+            <div class="duplicate-alert" id="duplicateAlertPanel">
+              <i class="fa-solid fa-triangle-exclamation"></i> 
+              <strong id="txt-dup-warning-title">Duplicate Alert:</strong> 
+              <span id="txt-dup-warning-desc">A citizen has already filed a complaint about this issue 120m away. Your report will be appended to support urgency.</span>
+            </div>
+
+            <!-- Impact scoring -->
+            <div class="intel-section">
+              <div class="intel-section-title">
+                <i class="fa-solid fa-users-rectangle"></i> <span id="txt-impact-title">Municipal Impact Prediction</span>
+              </div>
+              <div class="impact-prediction-values">
+                <div class="impact-metric">
+                  <div class="impact-metric-val" id="intel-urgency">N/A</div>
+                  <div class="impact-metric-lbl" id="txt-lbl-urgency">Urgency Level</div>
+                </div>
+                <div class="impact-metric">
+                  <div class="impact-metric-val" id="intel-impact">N/A</div>
+                  <div class="impact-metric-lbl" id="txt-lbl-pop">Estimated Affected Pop.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Letter drafts -->
+            <div class="intel-section">
+              <div class="intel-section-title">
+                <i class="fa-solid fa-file-invoice"></i> <span id="txt-letter-title">Auto-Generated Municipal Letter</span>
+              </div>
+              <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;" id="txt-letter-subtitle">GenAI drafted petition based on official circulars:</p>
+              <textarea class="official-letter-textarea" id="intel-letter-text" readonly placeholder="Fill category and description to auto-generate municipal petition..."></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: Document Auto-Pack -->
+      <section id="view-pack" class="view-panel">
+        <div class="pack-layout">
+          <!-- Selection & Score -->
+          <div class="glass pack-selector-card">
+            <h3 class="section-label" style="margin-bottom: 20px;" id="txt-pack-service-header">Select Target Service</h3>
+            
+            <div class="pack-service-option active" onclick="selectServicePack('aadhaar_update')" id="pack-aadhaar_update">
+              <div class="pack-service-option-title" id="txt-pack-name-aadhaar">Aadhaar Address Update</div>
+              <div class="pack-service-option-desc" id="txt-pack-desc-aadhaar">Verify details, rent agreement, and ID proofs</div>
+            </div>
+            
+            <div class="pack-service-option" onclick="selectServicePack('business_license')" id="pack-business_license">
+              <div class="pack-service-option-title" id="txt-pack-name-biz">Business Registration License</div>
+              <div class="pack-service-option-desc" id="txt-pack-desc-biz">Incorporation papers, PAN card, municipal approvals</div>
+            </div>
+
+            <div class="pack-service-option" onclick="selectServicePack('senior_pension')" id="pack-senior_pension">
+              <div class="pack-service-option-title" id="txt-pack-name-pension">Senior Citizen Pension</div>
+              <div class="pack-service-option-desc" id="txt-pack-desc-pension">Age eligibility verification, bank details, income proof</div>
+            </div>
+
+            <!-- Readiness Score Radial/Bar -->
+            <div class="readiness-score-box">
+              <span id="txt-readiness-label">Ready Status Pack Score</span>
+              <div class="readiness-score-number" id="pack-score-percent">33%</div>
+              <div class="readiness-progress-container">
+                <div class="readiness-progress-bar" id="pack-progress-bar" style="width: 33%;"></div>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted);" id="pack-missing-alert">Missing 2 critical documents</p>
+            </div>
+          </div>
+
+          <!-- Document slots upload and OCR check -->
+          <div class="glass pack-detail-card">
+            <div class="feed-header" style="margin-bottom: 20px;">
+              <span id="txt-pack-detail-title">Required Document Checklist</span>
+            </div>
+            
+            <div class="document-slots-list" id="document-slots-container">
+              <!-- Dynamically populated document rows via JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: Bureaucracy Translator -->
+      <section id="view-translator" class="view-panel">
+        <div class="translator-layout">
+          <!-- Input -->
+          <div class="glass translator-input-card">
+            <h3 class="section-label" id="txt-translator-input-title">Complex Government Circular</h3>
+            <p style="font-size: 12.5px; color: var(--text-secondary);" id="txt-translator-input-subtitle">Paste complex legal/bureaucratic terms here, or select a template:</p>
+            
+            <div class="jargon-templates">
+              <button class="jargon-template-btn" onclick="loadJargonTemplate('pension')" id="tmpl-pension">Pension Rules Clause</button>
+              <button class="jargon-template-btn" onclick="loadJargonTemplate('land')" id="tmpl-land">Land Conversion Proviso</button>
+              <button class="jargon-template-btn" onclick="loadJargonTemplate('tender')" id="tmpl-tender">Sewerage Tender Terms</button>
+            </div>
+
+            <textarea class="translator-textarea" id="jargon-input" placeholder="Paste official notices, gazettes, or government orders..."></textarea>
+            
+            <button class="btn btn-primary" onclick="runBureaucracyTranslation()" style="justify-content: center; padding: 12px;" id="btn-translate-jargon">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> <span id="txt-translate-btn">Simplify Language</span>
+            </button>
+          </div>
+
+          <!-- Output -->
+          <div class="glass translator-output-card">
+            <h3 class="section-label" id="txt-translator-output-title">Citizen-Friendly Summary</h3>
+            <div class="translator-output-content" id="jargon-output-box">
+              <p style="color: var(--text-muted);" id="txt-translation-placeholder">Click 'Simplify Language' to translate bureaucratic sentences into clear, direct instructions.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 6: Profile & Account Settings -->
+      <section id="view-profile" class="view-panel">
+        <div class="glass profile-card">
+          <div class="profile-header-row">
+            <div class="profile-avatar-large">
+              <i class="fa-solid fa-user-check"></i>
+            </div>
+            <div>
+              <div class="profile-name-title" id="profile-display-name">Citizen Name</div>
+              <div class="profile-status-sub" id="profile-display-status"><i class="fa-solid fa-circle-check"></i> SmartBhaarat Verified Profile</div>
+            </div>
+          </div>
+
+          <div class="profile-info-grid">
+            <div class="profile-info-group">
+              <label>Full Name</label>
+              <div class="profile-info-value" id="profile-val-name">Citizen Name</div>
+            </div>
+            <div class="profile-info-group">
+              <label>Aadhaar Identity</label>
+              <div class="profile-info-value" id="profile-val-aadhaar">XXXX-XXXX-XXXX</div>
+            </div>
+            <div class="profile-info-group">
+              <label>Registered Mobile</label>
+              <div class="profile-info-value" id="profile-val-phone">9876543210</div>
+            </div>
+            <div class="profile-info-group">
+              <label>State Jurisdiction</label>
+              <input type="text" class="profile-editable-input" id="profile-input-state" oninput="saveProfileChanges()">
+            </div>
+            <div class="profile-info-group">
+              <label>District / City</label>
+              <input type="text" class="profile-editable-input" id="profile-input-district" oninput="saveProfileChanges()">
+            </div>
+            <div class="profile-info-group" style="justify-content: flex-end;">
+              <button class="btn btn-secondary" onclick="handleLogout()" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: #ef4444; width: 100%; justify-content: center;">
+                <i class="fa-solid fa-right-from-bracket"></i> Sign Out Account
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Floating "Seva Sathi" Chat Companion Panel -->
+    <div class="eva-companion-trigger" onclick="toggleEvaPanel()" id="evaTriggerBtn">
+      <i class="fa-solid fa-comment-dots"></i>
+    </div>
+
+    <aside class="eva-panel glass" id="evaPanel">
+      <div class="eva-header">
+        <div class="eva-header-profile">
+          <div class="eva-avatar">
+            <i class="fa-solid fa-hands-holding-child" style="font-size: 16px;"></i>
+          </div>
+          <div>
+            <div class="eva-name" id="txt-seva-name">Seva Sathi</div>
+            <div class="eva-status" id="txt-seva-status">AI Assistant (Online)</div>
+          </div>
+        </div>
+        <div class="eva-header-actions">
+          <!-- Audio readout toggle -->
+          <button class="theme-toggle-btn" onclick="toggleVoiceReadout()" title="Toggle Voice Output" id="voiceReadoutToggleBtn">
+            <i class="fa-solid fa-volume-high" id="voiceReadoutIcon"></i>
+          </button>
+          <button class="theme-toggle-btn" onclick="toggleEvaPanel()" title="Close Panel">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat bubbles -->
+      <div class="eva-chat-history" id="evaChatHistory">
+        <div class="chat-bubble chat-bubble-ai" id="eva-welcome-bubble">
+          Namaste! I am Seva Sathi, your civic AI companion. I can help you check schemes, verify documents, report issues, and translate legal notices. How may I assist you today?
+        </div>
+      </div>
+
+      <!-- Typing Indicator -->
+      <div class="typing-indicator" id="evaTypingIndicator">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+
+      <!-- Suggested Prompts -->
+      <div class="chat-suggestions" id="evaSuggestions">
+        <div class="chat-suggestion-chip" onclick="handleSuggestedPrompt('ration')" id="sug-ration">How do I apply for a Ration Card?</div>
+        <div class="chat-suggestion-chip" onclick="handleSuggestedPrompt('pension')" id="sug-pension">What are pension eligibility rules?</div>
+        <div class="chat-suggestion-chip" onclick="handleSuggestedPrompt('pothole')" id="sug-pothole">How is my pothole complaint progressing?</div>
+      </div>
+
+      <!-- Text/Voice Input -->
+      <div class="eva-input-area">
+        <input type="text" class="eva-input-box" id="evaInputBox" placeholder="Ask Seva Sathi..." onkeydown="if(event.key === 'Enter') sendEvaChatMessage()">
+        <!-- STT button -->
+        <button class="eva-voice-btn" onclick="startSpeechRecognition()" title="Voice Input" id="evaMicBtn">
+          <i class="fa-solid fa-microphone"></i>
+        </button>
+        <button class="eva-send-btn" onclick="sendEvaChatMessage()" title="Send">
+          <i class="fa-solid fa-arrow-up"></i>
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Leaflet Map JS and dependencies -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Main Platform Logic -->
+  <script src="app.js"></script>
+
+</body>
+</html>
