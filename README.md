@@ -189,7 +189,7 @@ SmartBhaarat aims to:
 # 📸 Screenshots
 
 screenshots are 
-<img width="232" height="408" alt="image" src="https://github.com/user-attachments/assets/5e419806-fa8d-4e2f-8af8-52265b5b8569" />
+
 <img width="1494" height="966" alt="Screenshot 2026-07-07 131309" src="https://github.com/user-attachments/assets/e4746b03-0d22-41ed-a16d-955fece2f1d3" />
 <img width="232" height="408" alt="Screenshot 2026-07-07 131418" src="https://github.com/user-attachments/assets/cfce89ff-5bf7-4677-9470-4d77967309d2" />
 <img width="1920" height="1140" alt="Screenshot 2026-07-07 131404" src="https://github.com/user-attachments/assets/1a8b6464-355d-403d-823e-a5c6e9c39adf" />
