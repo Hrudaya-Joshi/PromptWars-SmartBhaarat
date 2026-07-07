@@ -602,8 +602,22 @@ function handleSignUp() {
     return;
   }
 
-  // Create profile database
+  // Build the profile object
   const profile = { name, aadhaar, phone, state, district, password };
+
+  // --- Persist in the registered-users database (survives logout) ---
+  const registeredUsers = JSON.parse(localStorage.getItem("sb_registered_users") || "[]");
+  // Prevent duplicate registrations with the same Aadhaar or phone
+  const duplicate = registeredUsers.find(u => u.aadhaar === aadhaar || u.phone === phone);
+  if (duplicate) {
+    errorEl.innerText = "An account with this Aadhaar or Phone already exists. Please log in.";
+    errorEl.style.display = "block";
+    return;
+  }
+  registeredUsers.push(profile);
+  localStorage.setItem("sb_registered_users", JSON.stringify(registeredUsers));
+
+  // --- Set the active session ---
   localStorage.setItem("sb_user_profile", JSON.stringify(profile));
 
   // Hide onboarding
@@ -622,36 +636,78 @@ function handleLogin() {
   const password = document.getElementById("login-password").value.trim();
   const errorEl = document.getElementById("login-error-msg");
 
-  // Look up profile database
-  const savedProfile = JSON.parse(localStorage.getItem("sb_user_profile"));
-  
-  if (savedProfile && (identifier === savedProfile.aadhaar || identifier === savedProfile.phone) && password === savedProfile.password) {
-    // Hide onboarding overlay
+  // Helper to show error
+  function showError(msg) {
+    errorEl.innerText = msg;
+    errorEl.style.display = "block";
+  }
+
+  if (!identifier || !password) {
+    showError("Please enter your Aadhaar / Phone / Name and password.");
+    return;
+  }
+
+  // --- 1. Search the persistent registered-users database ---
+  const registeredUsers = JSON.parse(localStorage.getItem("sb_registered_users") || "[]");
+  const identifierLower = identifier.toLowerCase();
+  const matchedUser = registeredUsers.find(u =>
+    (
+      identifier === u.aadhaar ||
+      identifier === u.phone ||
+      identifierLower === (u.name || "").toLowerCase()
+    ) && password === u.password
+  );
+
+  if (matchedUser) {
+    localStorage.setItem("sb_user_profile", JSON.stringify(matchedUser));
     document.getElementById("onboardingScreen").style.opacity = "0";
     setTimeout(() => {
       document.getElementById("onboardingScreen").style.display = "none";
     }, 400);
-
     checkActiveSession();
     initMap();
-  } else {
-    // Check fallback default credentials if db empty
-    if (!savedProfile && (identifier === "123456789012" || identifier === "9876543210") && password === "citizen") {
-      const defaultProfile = {
-        name: "Rudraksh Sharma",
-        aadhaar: "123456789012",
-        phone: "9876543210",
-        state: "Karnataka",
-        district: "Bengaluru",
-        password: "citizen"
-      };
-      localStorage.setItem("sb_user_profile", JSON.stringify(defaultProfile));
+    return;
+  }
+
+  // --- 2. Fallback: check legacy sb_user_profile (backward compat) ---
+  const savedProfile = JSON.parse(localStorage.getItem("sb_user_profile"));
+  if (savedProfile &&
+    (
+      identifier === savedProfile.aadhaar ||
+      identifier === savedProfile.phone ||
+      identifierLower === (savedProfile.name || "").toLowerCase()
+    ) && password === savedProfile.password) {
+    document.getElementById("onboardingScreen").style.opacity = "0";
+    setTimeout(() => {
       document.getElementById("onboardingScreen").style.display = "none";
-      checkActiveSession();
-      initMap();
-    } else {
-      errorEl.style.display = "block";
-    }
+    }, 400);
+    checkActiveSession();
+    initMap();
+    return;
+  }
+
+  // --- 3. Fallback: hardcoded demo credentials ---
+  if ((identifier === "123456789012" || identifier === "9876543210") && password === "citizen") {
+    const defaultProfile = {
+      name: "Rudraksh Sharma",
+      aadhaar: "123456789012",
+      phone: "9876543210",
+      state: "Karnataka",
+      district: "Bengaluru",
+      password: "citizen"
+    };
+    localStorage.setItem("sb_user_profile", JSON.stringify(defaultProfile));
+    document.getElementById("onboardingScreen").style.display = "none";
+    checkActiveSession();
+    initMap();
+    return;
+  }
+
+  // --- No match found ---
+  if (registeredUsers.length === 0) {
+    showError("No accounts found. Please create an account first.");
+  } else {
+    showError("Invalid credentials. Enter your Aadhaar, Phone number, or Full Name + correct password.");
   }
 }
 
@@ -680,6 +736,7 @@ function checkActiveSession() {
 }
 
 function handleLogout() {
+  // Only clear the active session — registered accounts persist in sb_registered_users
   localStorage.removeItem("sb_user_profile");
   checkActiveSession();
 }
